@@ -55,6 +55,45 @@ def backup(repo_path: str, sources: List[str], password: Optional[str] = None,
     _run_restic_command(command, password)
 
 
+def backup_with_output(
+    repo_path: str,
+    sources: List[str],
+    password: Optional[str] = None,
+    exclude: Optional[List[str]] = None,
+    tags: Optional[List[str]] = None,
+) -> tuple[bool, str, str, int]:
+    """
+    Run restic backup and capture full output without raising on failure.
+
+    Returns:
+        (success, stdout, stderr, return_code)
+    """
+    logger.info("Starting backup of {} to repo {}", sources, repo_path)
+    env = os.environ.copy()
+    if password:
+        env['RESTIC_PASSWORD'] = password
+    command = ['backup', '--repo', repo_path]
+    if exclude:
+        for ex in exclude:
+            command.extend(['--exclude', ex])
+    if tags:
+        for tag in tags:
+            command.extend(['--tag', tag])
+    command.extend(sources)
+    logger.debug("Running restic command: {}", command)
+    result = subprocess.run(
+        ['restic'] + command,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    success = result.returncode == 0
+    if not success:
+        logger.error("Restic command failed: {}", result.stderr)
+    return success, result.stdout or '', result.stderr or '', result.returncode
+
+
 def list_snapshots(repo_path: str, password: Optional[str] = None) -> str:
     """List snapshots in the repository."""
     logger.debug("Listing snapshots in repo {}", repo_path)

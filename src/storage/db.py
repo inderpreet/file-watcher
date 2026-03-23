@@ -32,6 +32,23 @@ CREATE TABLE IF NOT EXISTS file_details (
 )
 """
 
+# Table for RESTIC backup logs
+TABLE_RESTIC_LOGS = "restic_logs"
+
+_RESTIC_LOGS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS restic_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    backup_name TEXT NOT NULL,
+    source_paths TEXT NOT NULL,
+    dest_path TEXT NOT NULL,
+    status TEXT NOT NULL,
+    stdout TEXT,
+    stderr TEXT,
+    return_code INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+)
+"""
+
 
 def _table_has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
     cur = conn.execute(f"PRAGMA table_info({table})")
@@ -57,6 +74,12 @@ def init_file_details_table() -> None:
     finally:
         conn.close()
     logger.debug("Ensured file_details table exists")
+
+
+def init_restic_logs_table() -> None:
+    """Create the restic_logs table if it does not exist."""
+    execute(_RESTIC_LOGS_SCHEMA.strip())
+    logger.debug("Ensured restic_logs table exists")
 
 
 def _get_db_path() -> Path:

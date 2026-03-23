@@ -17,17 +17,19 @@ st.set_page_config(page_title="File Watch", page_icon="📦", layout="wide")
 
 API_BASE = st.sidebar.text_input("API URL", value="http://127.0.0.1:8000", key="api_base")
 API_PREFIX = f"{API_BASE.rstrip('/')}/api/v1/storage"
+BACKUPS_PREFIX = f"{API_BASE.rstrip('/')}/api/v1/backups"
 
 st.title("File Watch")
 st.markdown("Dashboard for file management and backup.")
 
 st.divider()
 
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Health",
     "Single File CRUD",
     "List Files",
     "Bulk Operations",
+    "Backup",
 ])
 
 
@@ -55,6 +57,21 @@ def api_put(path: str, json: dict):
 def api_delete(path: str, json: dict | None = None):
     with httpx.Client(timeout=10.0) as client:
         r = client.request("DELETE", f"{API_PREFIX}{path}", json=json)
+        r.raise_for_status()
+        return r.json()
+
+
+def backups_api_post(path: str, json: dict | None = None):
+    with httpx.Client(timeout=300.0) as client:
+        kwargs = {} if json is None else {"json": json}
+        r = client.post(f"{BACKUPS_PREFIX}{path}", **kwargs)
+        r.raise_for_status()
+        return r.json()
+
+
+def backups_api_get(path: str, params: dict | None = None):
+    with httpx.Client(timeout=30.0) as client:
+        r = client.get(f"{BACKUPS_PREFIX}{path}", params=params)
         r.raise_for_status()
         return r.json()
 
@@ -256,3 +273,59 @@ with tab4:
                 st.error("IDs must be integers")
             except Exception as e:
                 st.exception(e)
+
+
+# --- Backup (MASTERCHIEF) ---
+with tab5:
+    st.subheader("MASTERCHIEF Backup")
+    st.info("Backup uses paths from .env (MASTERCHIEF_SRC, MASTERCHIEF_DEST, MASTERCHIEF_PASSWORD). Configure these before running.")
+    if st.button("Run MASTERCHIEF Backup", key="backup_run_btn", type="primary"):
+        try:
+            with st.spinner("Running backup..."):
+                data = backups_api_post("/masterchief/run")
+            if data.get("status") == "success":
+                st.success("Backup completed successfully")
+                st.metric("Log ID", data.get("log_id", "—"))
+                if data.get("stdout"):
+                    with st.expander("RESTIC output"):
+                        st.text(data["stdout"])
+            else:
+                st.error("Backup failed")
+                st.text(data.get("stderr", data.get("message", "Unknown error")))
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 500:
+                try:
+                    body = e.response.json()
+                    detail = body.get("detail", body)
+                    if not isinstance(detail, dict):
+                        detail = {"message": str(detail)}
+                    st.error(f"Backup failed: {detail.get('message', detail.get('detail', 'Unknown error'))}")
+                    if detail.get("stderr"):
+                        with st.expander("Error details"):
+                            st.text(detail["stderr"])
+                    if detail.get("log_id"):
+                        st.caption(f"Logged as record #{detail['log_id']}")
+                except Exception:
+                    st.error(e.response.text)
+            elif e.response.status_code == 400:
+                st.error(f"Configuration error: {e.response.text}")
+            else:
+                st.error(e.response.text)
+        except httpx.ConnectError:
+            st.error(f"Cannot connect to API. Is the server running at {API_BASE}?")
+        except Exception as e:
+            st.exception(e)
+    st.markdown("---")
+    st.subheader("Recent Backup Logs")
+    if st.button("Refresh Logs", key="backup_logs_btn"):
+        try:
+            logs_data = backups_api_get("/logs", {"limit": 20})
+            logs = logs_data.get("logs", [])
+            if logs:
+                st.dataframe(logs, use_container_width=True)
+            else:
+                st.info("No backup logs yet")
+        except httpx.ConnectError:
+            st.error(f"Cannot connect to API. Is the server running at {API_BASE}?")
+        except Exception as e:
+            st.exception(e)

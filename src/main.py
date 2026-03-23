@@ -8,13 +8,14 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from src.api import api, limiter
 from src.logger import logger
-from src.storage.db import init_file_details_table
+from src.storage.db import init_file_details_table, init_restic_logs_table
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application started")
     init_file_details_table()
+    init_restic_logs_table()
     yield
     logger.info("Application shutdown")
 
