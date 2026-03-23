@@ -1,0 +1,10 @@
+# Add your dependencies here
+# Example: requests==2.25.1
+python-dotenv==1.0.0
+loguru>=0.7.0
+dotenv>=0.9.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+slowapi>=0.1.9
+streamlit>=1.40.0
+httpx>=0.27.0
